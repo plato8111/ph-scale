@@ -47,6 +47,13 @@ export default {
         value: ''
       },
       default: true
+    },
+    {
+      name: 'selection-reset',
+      label: { en: 'Selection Reset' },
+      event: {
+        value: ''
+      }
     }
   ]
 };

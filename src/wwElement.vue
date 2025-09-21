@@ -151,12 +151,19 @@ export default {
       return currentNumber >= minSelected && currentNumber <= maxSelected
     }
 
-    watch(() => props.content?.initialValue, (newValue, oldValue) => {
-      if (newValue !== undefined && newValue !== oldValue) {
-        selectedItems.value = newValue ? [newValue] : []
-        setInternalValue(newValue || '')
+    // MANDATORY: Watch for ALL property changes for real-time reactivity
+    watch(() => [
+      props.content?.initialValue,
+      props.content?.showOutput,
+      // All other content properties that affect component rendering
+    ], ([newInitialValue], [oldInitialValue]) => {
+      // Handle initialValue changes
+      if (newInitialValue !== undefined && newInitialValue !== oldInitialValue) {
+        selectedItems.value = newInitialValue ? [newInitialValue] : []
+        setInternalValue(newInitialValue || '')
       }
-    }, { immediate: true })
+      // Other properties are handled by computed styles automatically
+    }, { immediate: true, deep: true })
 
     return {
       phItems,
@@ -173,18 +180,42 @@ export default {
 
 <style scoped>
 .ph-scale {
-  width: fit-content;
+  width: 100%;
+  max-width: fit-content;
   margin: 0 auto;
   font-family: Arial, sans-serif;
   background: white;
   display: flex;
   flex-direction: column;
   align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #ccc transparent;
+}
+
+.ph-scale::-webkit-scrollbar {
+  height: 6px;
+}
+
+.ph-scale::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.ph-scale::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.ph-scale::-webkit-scrollbar-thumb:hover {
+  background: #999;
 }
 
 .ph-row {
   display: flex;
   background: white;
+  min-width: max-content;
+  padding: 0 10px;
 }
 
 .ph-cell {
@@ -200,6 +231,12 @@ export default {
   cursor: pointer;
   user-select: none;
   margin-right: 8px;
+  touch-action: manipulation;
+  transition: transform 0.1s ease;
+}
+
+.ph-cell:active {
+  transform: scale(0.95);
 }
 
 .ph-cell:last-child {
@@ -215,13 +252,14 @@ export default {
 
 .output {
   margin-top: 10px;
-  padding: 5px;
+  padding: 8px 12px;
   text-align: center;
   background: #f5f5f5;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 10px;
-  width: 150px;
+  font-size: 12px;
+  min-width: 150px;
+  max-width: 90%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -238,6 +276,7 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
+  touch-action: manipulation;
 }
 
 .labels-row {
@@ -247,6 +286,8 @@ export default {
   font-size: 14px;
   color: #666;
   height: 20px;
+  min-width: max-content;
+  padding: 0 10px;
 }
 
 .label-group {
@@ -312,6 +353,148 @@ export default {
   font-weight: bold;
   font-size: 20px;
   color: #333;
+}
+
+/* Mobile and Tablet Responsive Design */
+@media (max-width: 768px) {
+  .ph-scale {
+    padding: 0 8px;
+  }
+
+  .ph-row {
+    padding: 0 4px;
+  }
+
+  .ph-cell {
+    width: 38px;
+    height: 32px;
+    font-size: 10px;
+    margin-right: 6px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .ph-gap {
+    width: 6px;
+    height: 32px;
+    min-height: 44px;
+  }
+
+  .labels-row {
+    padding: 0 4px;
+    font-size: 12px;
+  }
+
+  .ph-title {
+    font-size: 18px;
+    top: -28px;
+  }
+
+  .output {
+    font-size: 11px;
+    padding: 6px 10px;
+    max-width: 95%;
+  }
+
+  .label-group.acidic .label-line {
+    width: 100px;
+  }
+
+  .label-group.optimal .label-line {
+    width: 80px;
+  }
+
+  .label-group.alkaline .label-line {
+    width: 90px;
+  }
+}
+
+/* Small Mobile Devices */
+@media (max-width: 480px) {
+  .ph-scale {
+    padding: 0 4px;
+  }
+
+  .ph-row {
+    padding: 0 2px;
+  }
+
+  .ph-cell {
+    width: 32px;
+    height: 36px;
+    font-size: 9px;
+    margin-right: 4px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .ph-gap {
+    width: 4px;
+    height: 36px;
+    min-height: 44px;
+  }
+
+  .labels-row {
+    padding: 0 2px;
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .ph-title {
+    font-size: 16px;
+    top: -26px;
+  }
+
+  .output {
+    font-size: 10px;
+    padding: 5px 8px;
+    margin-top: 8px;
+  }
+
+  .label-text {
+    font-size: 10px;
+  }
+
+  .label-group.acidic .label-line {
+    width: 80px;
+  }
+
+  .label-group.optimal .label-line {
+    width: 60px;
+  }
+
+  .label-group.alkaline .label-line {
+    width: 70px;
+  }
+}
+
+/* Large Mobile Landscape */
+@media (max-width: 768px) and (orientation: landscape) {
+  .ph-cell {
+    width: 42px;
+    height: 28px;
+    font-size: 10px;
+    margin-right: 7px;
+  }
+
+  .ph-gap {
+    width: 7px;
+    height: 28px;
+  }
+
+  .ph-title {
+    font-size: 17px;
+    top: -27px;
+  }
+}
+
+/* Ensure minimum touch target size on all devices */
+@media (pointer: coarse) {
+  .ph-cell,
+  .ph-gap {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 </style>
