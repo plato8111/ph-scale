@@ -10,8 +10,8 @@
           class="ph-cell"
           :style="{ backgroundColor: item.color }"
           :class="{
-            'selected': isItemInRange(item.value.toString()),
-            'unselected': selectedItems.length > 0 && !isItemInRange(item.value.toString())
+            'selected': selectedItems.includes(item.value.toString()),
+            'unselected': selectedItems.length > 0 && !selectedItems.includes(item.value.toString()) && !isBetweenSelections(item.value)
           }"
           @click="selectPH(item.value)"
         >
@@ -27,6 +27,40 @@
       </template>
     </div>
 
+    <!-- Mobile/Tablet Simple Range Sliders -->
+    <div class="simple-range-container mobile-only">
+      <div class="range-label">Range: {{ sliderMin }} - {{ sliderMax }}</div>
+      <div class="range-inputs">
+        <div class="input-group">
+          <label>Min: {{ sliderMin }}</label>
+          <input
+            type="range"
+            min="0"
+            max="14"
+            step="0.5"
+            v-model.number="sliderMin"
+            class="range-input range-min"
+          />
+        </div>
+        <div class="input-group">
+          <label>Max: {{ sliderMax }}</label>
+          <input
+            type="range"
+            min="0"
+            max="14"
+            step="0.5"
+            v-model.number="sliderMax"
+            class="range-input range-max"
+          />
+        </div>
+      </div>
+      <div class="range-scale">
+        <span>0</span>
+        <span>7</span>
+        <span>14</span>
+      </div>
+    </div>
+
     <div v-if="content?.showOutput" class="output" @click="resetSelection" :class="{ invisible: !selectedValue }">
       <span v-if="selectedValue">Selected pH: {{ selectedValue }}</span>
       <span v-else>&nbsp;</span>
@@ -35,7 +69,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, reactive } from 'vue'
+import { ref, computed, watch, reactive, onMounted } from 'vue'
 
 export default {
   props: {
@@ -48,6 +82,8 @@ export default {
 
   setup(props, { emit }) {
     const selectedItems = ref([])
+    const sliderMin = ref(0)
+    const sliderMax = ref(0)
 
     const phItems = reactive([
       { value: 0, color: '#da1325' },
@@ -68,7 +104,7 @@ export default {
     ])
 
     const selectedValue = computed(() => {
-      if (selectedItems.value.length === 0) return ''
+      if (!selectedItems.value || !Array.isArray(selectedItems.value) || selectedItems.value.length === 0) return ''
       if (selectedItems.value.length === 1) return selectedItems.value[0]
       const sorted = [...selectedItems.value].sort((a, b) => parseFloat(a) - parseFloat(b))
       return `${sorted[0]}-${sorted[sorted.length - 1]}`
@@ -82,7 +118,13 @@ export default {
     }) || { value: ref(''), setValue: () => {} }
 
     const selectPH = (value) => {
-      const valueStr = value.toString()
+      const valueStr = value?.toString() || ''
+      if (!valueStr) return
+
+      if (!selectedItems.value || !Array.isArray(selectedItems.value)) {
+        selectedItems.value = []
+      }
+
       const index = selectedItems.value.indexOf(valueStr)
 
       if (index > -1) {
@@ -101,7 +143,11 @@ export default {
     }
 
     const resetSelection = () => {
-      selectedItems.value = []
+      if (!selectedItems.value || !Array.isArray(selectedItems.value)) {
+        selectedItems.value = []
+      } else {
+        selectedItems.value = []
+      }
       setInternalValue('')
       if (emit) {
         emit('trigger-event', {
@@ -112,7 +158,15 @@ export default {
     }
 
     const selectHalf = (value) => {
-      const halfValue = (value + 0.5).toString()
+      const numValue = parseFloat(value)
+      if (isNaN(numValue)) return
+
+      const halfValue = (numValue + 0.5).toString()
+
+      if (!selectedItems.value || !Array.isArray(selectedItems.value)) {
+        selectedItems.value = []
+      }
+
       const index = selectedItems.value.indexOf(halfValue)
 
       if (index > -1) {
@@ -130,28 +184,83 @@ export default {
       }
     }
 
-    const isItemInRange = (itemId) => {
-      if (selectedItems.value.length === 0) return false
-      if (selectedItems.value.length === 1) {
-        return selectedItems.value.includes(itemId)
-      }
+    const isBetweenSelections = (itemValue) => {
+      if (!selectedItems.value || selectedItems.value.length < 2) return false
 
-      // For multiple selections, show range between min and max
-      const selectedNumbers = selectedItems.value.map(id => parseFloat(id)).sort((a, b) => a - b)
-      const minSelected = selectedNumbers[0]
-      const maxSelected = selectedNumbers[selectedNumbers.length - 1]
-      const currentNumber = parseFloat(itemId)
+      const numValue = parseFloat(itemValue)
+      const selectedNumbers = selectedItems.value.map(item => parseFloat(item)).sort((a, b) => a - b)
+      const min = selectedNumbers[0]
+      const max = selectedNumbers[selectedNumbers.length - 1]
 
-      return currentNumber >= minSelected && currentNumber <= maxSelected
+      return numValue > min && numValue < max
     }
 
+    const updateSliderSelection = () => {
+      const minVal = parseFloat(sliderMin.value)
+      const maxVal = parseFloat(sliderMax.value)
+
+      if (isNaN(minVal) || isNaN(maxVal)) return
+
+      const min = Math.min(minVal, maxVal)
+      const max = Math.max(minVal, maxVal)
+
+      // Create range array for selected values
+      const range = []
+      for (let i = min; i <= max; i += 0.5) {
+        range.push(i.toString())
+      }
+
+      if (!selectedItems.value || !Array.isArray(selectedItems.value)) {
+        selectedItems.value = []
+      }
+      selectedItems.value = range
+      setInternalValue(selectedValue.value)
+
+      if (emit) {
+        emit('trigger-event', {
+          name: 'ph-selected',
+          event: { value: selectedValue.value }
+        })
+      }
+    }
+
+    // Ensure sliders don't cross over
+    const constrainSliders = () => {
+      if (sliderMin.value >= sliderMax.value) {
+        sliderMax.value = sliderMin.value + 0.5
+      }
+      if (sliderMax.value <= sliderMin.value) {
+        sliderMin.value = sliderMax.value - 0.5
+      }
+      // Keep in bounds
+      sliderMin.value = Math.max(0, Math.min(13.5, sliderMin.value))
+      sliderMax.value = Math.max(0.5, Math.min(14, sliderMax.value))
+    }
+
+    // Initialize sliders to not interfere with component logic
+    onMounted(() => {
+      // Only update if there are no selected items yet
+      if (!selectedItems.value || selectedItems.value.length === 0) {
+        // Don't auto-select anything - let user interact first
+        selectedItems.value = []
+      }
+    })
+
+    // Watch slider changes
+    watch([sliderMin, sliderMax], () => {
+      constrainSliders()
+      updateSliderSelection()
+    })
 
     // MANDATORY: Watch for ALL property changes for real-time reactivity
     watch(() => props.content?.initialValue, (newInitialValue, oldInitialValue) => {
       // Handle initialValue changes
       if (newInitialValue !== undefined && newInitialValue !== oldInitialValue) {
-        selectedItems.value = newInitialValue ? [newInitialValue] : []
-        setInternalValue(newInitialValue || '')
+        if (!selectedItems.value || !Array.isArray(selectedItems.value)) {
+          selectedItems.value = []
+        }
+        selectedItems.value = newInitialValue ? [newInitialValue.toString()] : []
+        setInternalValue(newInitialValue?.toString() || '')
       }
     }, { immediate: true })
 
@@ -162,7 +271,10 @@ export default {
       selectPH,
       resetSelection,
       selectHalf,
-      isItemInRange
+      isBetweenSelections,
+      sliderMin,
+      sliderMax,
+      updateSliderSelection
     }
   }
 }
@@ -292,10 +404,20 @@ export default {
   margin-bottom: 15px;
 }
 
+/* Hide mobile-only elements on desktop */
+.mobile-only {
+  display: none;
+}
+
 /* Mobile and Tablet Grid Layout - 3 rows x 5 columns */
 @media (max-width: 1024px) {
   .ph-scale {
     padding: 0 10px;
+  }
+
+  /* Show mobile-only elements */
+  .mobile-only {
+    display: block;
   }
 
   /* Transform row into grid */
@@ -325,14 +447,12 @@ export default {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     min-height: auto !important;
     min-width: auto !important;
-  }
-
-  .ph-cell:active {
-    transform: scale(0.95);
+    cursor: default !important;
+    pointer-events: none !important;
   }
 
   .ph-cell.selected {
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3), 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
 
   .ph-cell.unselected {
@@ -352,8 +472,93 @@ export default {
     font-size: 20px;
   }
 
-  .output {
+  /* Simple Range Sliders Styling */
+  .simple-range-container {
+    width: 100%;
+    max-width: 350px;
+    margin: 15px auto;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+  }
+
+  .range-label {
     font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    text-align: center;
+    margin-bottom: 15px;
+  }
+
+  .range-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .input-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    text-align: center;
+  }
+
+  .range-input {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: #ddd;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #007aff;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    border: 2px solid white;
+  }
+
+  .range-input::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #007aff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .range-max::-webkit-slider-thumb {
+    background: #ff6b6b;
+  }
+
+  .range-max::-moz-range-thumb {
+    background: #ff6b6b;
+  }
+
+  .range-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .output {
+    font-size: 16px;
     padding: 0;
     max-width: 350px;
     width: 100%;
@@ -370,13 +575,14 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f5f5f5;
-    border: 1px solid #ccc;
+    background: rgba(245, 245, 245, 0.7);
+    border: 1px solid rgba(204, 204, 204, 0.5);
     border-radius: 6px;
-    font-weight: bold;
-    font-size: 14px;
+    font-weight: normal;
+    font-size: 16px;
     grid-column: 1 / -1;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    color: rgba(51, 51, 51, 0.8);
   }
 }
 
@@ -410,7 +616,7 @@ export default {
 
   .output span {
     height: 44px;
-    font-size: 13px;
+    font-size: 15px;
   }
 }
 
@@ -501,16 +707,17 @@ export default {
     grid-template-columns: none !important;
     grid-template-rows: none !important;
     gap: 0 !important;
-    max-width: 200px !important;
+    max-width: 220px !important;
     width: auto !important;
-    margin: 8px auto 0 !important;
-    padding: 6px 8px !important;
-    background: #f5f5f5 !important;
-    border: 1px solid #ccc !important;
+    margin: 10px auto 0 !important;
+    padding: 8px 12px !important;
+    background: rgba(245, 245, 245, 0.6) !important;
+    border: 1px solid rgba(204, 204, 204, 0.4) !important;
     border-radius: 4px !important;
     text-align: center !important;
-    min-width: 120px !important;
-    font-size: 10px !important;
+    min-width: 140px !important;
+    font-size: 14px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
   }
 
   .ph-scale .output span {
@@ -521,12 +728,13 @@ export default {
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    font-size: 10px !important;
+    font-size: 14px !important;
     font-weight: normal !important;
     grid-column: auto !important;
     flex: none !important;
     align-items: normal !important;
     justify-content: normal !important;
+    color: rgba(51, 51, 51, 0.8) !important;
   }
 }
 
